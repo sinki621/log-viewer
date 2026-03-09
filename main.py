@@ -1,7 +1,8 @@
 import webview
 import json
+import os
 
-# 최적화된 가상 스크롤 및 고속 렌더링 HTML
+# HTML/JS 소스 (고속 로딩 및 로딩바 추가)
 html_content = """
 <!DOCTYPE html>
 <html>
@@ -11,34 +12,34 @@ html_content = """
         body { font-family: 'Consolas', monospace; background-color: #1e1e1e; color: #d4d4d4; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { padding: 10px 20px; background: #2d2d2d; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #3e3e3e; }
         
-        /* 가상 스크롤 컨테이너 */
+        /* 로딩바 스타일 */
+        #progress-container { flex: 1; height: 20px; background: #3c3c3c; border-radius: 10px; overflow: hidden; display: none; position: relative; }
+        #progress-bar { width: 0%; height: 100%; background: #007acc; transition: width 0.1s; }
+        #progress-text { position: absolute; width: 100%; text-align: center; font-size: 11px; line-height: 20px; color: white; }
+
         #viewport { flex: 1; overflow-y: auto; position: relative; background: #1e1e1e; }
         #spacer { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
         #content { position: absolute; top: 0; left: 0; width: 100%; will-change: transform; }
         
-        .log-line { 
-            height: 20px; /* 고정 높이가 성능 핵심 */
-            line-height: 20px;
-            padding: 0 15px;
-            font-size: 13px;
-            white-space: pre;
-            border-bottom: 1px solid #2a2a2a;
-            box-sizing: border-box;
-        }
+        .log-line { height: 20px; line-height: 20px; padding: 0 15px; font-size: 13px; white-space: pre; border-bottom: 1px solid #2a2a2a; box-sizing: border-box; }
         .error { color: #ff5555; font-weight: bold; background: rgba(255,85,85,0.1); }
         .warning { color: #ffb86c; background: rgba(255,184,108,0.1); }
         
         footer { padding: 10px; background: #2d2d2d; border-top: 1px solid #3e3e3e; }
         input { width: 100%; padding: 8px; background: #3c3c3c; border: 1px solid #555; color: #fff; border-radius: 4px; outline: none; }
-        button { cursor: pointer; padding: 6px 12px; background: #007acc; border: none; color: white; border-radius: 4px; font-size: 12px; }
-        #status { font-size: 12px; color: #888; margin-left: auto; }
+        button { cursor: pointer; padding: 6px 12px; background: #007acc; border: none; color: white; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+        #status { font-size: 12px; color: #888; white-space: nowrap; }
     </style>
 </head>
 <body>
     <header>
-        <button onclick="pywebview.api.open_file()">로그 열기</button>
+        <button id="openBtn" onclick="pywebview.api.open_file()">로그 열기</button>
+        <div id="progress-container">
+            <div id="progress-bar"></div>
+            <div id="progress-text">0%</div>
+        </div>
         <button onclick="sortLogs()">시간순 정렬</button>
-        <span id="status">파일을 로드하세요.</span>
+        <span id="status">대기 중</span>
     </header>
     
     <div id="viewport">
@@ -53,12 +54,24 @@ html_content = """
     <script>
         let allLogs = [];
         let displayLogs = [];
-        const rowHeight = 20; // .log-line height와 일치시켜야 함
+        const rowHeight = 20;
         const viewport = document.getElementById('viewport');
         const spacer = document.getElementById('spacer');
         const content = document.getElementById('content');
+        const pContainer = document.getElementById('progress-container');
+        const pBar = document.getElementById('progress-bar');
+        const pText = document.getElementById('progress-text');
 
-        // Python에서 호출하는 데이터 로드 함수
+        // 로딩 상태 업데이트 함수
+        function updateLoading(percent, current, total) {
+            pContainer.style.display = 'block';
+            pBar.style.width = percent + '%';
+            pText.innerText = `로딩 중... ${percent}% (${current.toLocaleString()} / ${total.toLocaleString()} 줄)`;
+            if (percent >= 100) {
+                setTimeout(() => { pContainer.style.display = 'none'; }, 1000);
+            }
+        }
+
         function loadLogData(lines) {
             allLogs = lines;
             displayLogs = lines;
@@ -66,23 +79,18 @@ html_content = """
             document.getElementById('status').innerText = `총 ${allLogs.length.toLocaleString()} 줄 로드됨`;
         }
 
-        // 가상 스크롤 핵심 로직
         function render() {
             const scrollTop = viewport.scrollTop;
             const viewportHeight = viewport.offsetHeight;
-            
             const startIndex = Math.floor(scrollTop / rowHeight);
-            const endIndex = Math.min(displayLogs.length, Math.ceil((scrollTop + viewportHeight) / rowHeight) + 5);
+            const endIndex = Math.min(displayLogs.length, Math.ceil((scrollTop + viewportHeight) / rowHeight) + 10);
             
             const visibleLines = displayLogs.slice(startIndex, endIndex);
-            
             content.style.transform = `translateY(${startIndex * rowHeight}px)`;
             
             content.innerHTML = visibleLines.map(line => {
                 let safe = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                let highlighted = safe.replace(/(error)/gi, '<span class="error">$1</span>')
-                                      .replace(/(warning)/gi, '<span class="warning">$1</span>');
-                return `<div class="log-line">${highlighted}</div>`;
+                return `<div class="log-line">${safe.replace(/(error)/gi, '<span class="error">$1</span>').replace(/(warning)/gi, '<span class="warning">$1</span>')}</div>`;
             }).join('');
         }
 
@@ -94,21 +102,15 @@ html_content = """
         viewport.addEventListener('scroll', render);
         window.addEventListener('resize', render);
 
-        // 정렬 성능 최적화
         function sortLogs() {
-            document.getElementById('status').innerText = "고속 정렬 중...";
+            document.getElementById('status').innerText = "정렬 중...";
             setTimeout(() => {
-                displayLogs.sort((a, b) => {
-                    const tsA = a.substring(0, 19); // ISO8601의 YYYY-MM-DDTHH:MM:SS 부분만 비교
-                    const tsB = b.substring(0, 19);
-                    return tsA.localeCompare(tsB);
-                });
+                displayLogs.sort((a, b) => a.substring(0, 19).localeCompare(b.substring(0, 19)));
                 render();
                 document.getElementById('status').innerText = "정렬 완료";
             }, 10);
         }
 
-        // 필터링 성능 최적화
         document.getElementById('searchInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 const k = e.target.value.toLowerCase().trim();
@@ -125,17 +127,31 @@ html_content = """
 class Api:
     def open_file(self):
         file_path = window.create_file_dialog(webview.OPEN_DIALOG, file_types=('Log Files (*.txt;*.log)', 'All files (*.*)'))
-        if file_path:
-            try:
-                # 대용량 파일 고속 읽기
-                with open(file_path[0], 'r', encoding='utf-8', errors='ignore') as f:
-                    lines = f.read().splitlines()
-                # JSON 직렬화를 통해 안정적으로 데이터 전송
-                window.evaluate_js(f"loadLogData({json.dumps(lines)})")
-            except Exception as e:
-                window.evaluate_js(f"alert('Error: {str(e)}')")
+        if not file_path: return
+
+        try:
+            with open(file_path[0], 'r', encoding='utf-8', errors='ignore') as f:
+                lines = f.read().splitlines()
+            
+            total = len(lines)
+            chunk_size = 50000  # 5만 줄 단위로 처리
+            
+            # 초기화
+            window.evaluate_js("allLogs = []; displayLogs = []; updateLoading(0, 0, 0);")
+            
+            for i in range(0, total, chunk_size):
+                chunk = lines[i:i + chunk_size]
+                percent = int((min(i + chunk_size, total) / total) * 100)
+                # JSON 데이터를 안전하게 전달하기 위해 dumps 사용
+                json_data = json.dumps(chunk)
+                window.evaluate_js(f"allLogs.push(...{json_data}); updateLoading({percent}, {min(i + chunk_size, total)}, {total});")
+            
+            window.evaluate_js("displayLogs = allLogs; updateScroll();")
+            
+        except Exception as e:
+            window.evaluate_js(f"alert('Error: {str(e)}')")
 
 if __name__ == '__main__':
     api = Api()
-    window = webview.create_window('Ultra-Fast Log Viewer', html=html_content, js_api=api, width=1280, height=800)
+    window = webview.create_window('Pro Log Viewer', html=html_content, js_api=api, width=1280, height=800)
     webview.start()
