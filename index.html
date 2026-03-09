@@ -2,106 +2,203 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Fast Log Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Log Viewer - Portable</title>
     <style>
-        body { font-family: 'Consolas', monospace; background-color: #1e1e1e; color: #d4d4d4; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        header { padding: 10px 20px; background: #333; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid #444; }
-        #log-container { flex: 1; overflow-y: auto; padding: 10px; white-space: pre-wrap; word-break: break-all; line-height: 1.5; }
-        .log-line { border-bottom: 1px solid #2d2d2d; padding: 2px 0; }
-        .error { color: #ff5555; font-weight: bold; }
-        .warning { color: #ffb86c; }
-        .highlight { background-color: #f1c40f; color: #000; }
-        footer { padding: 10px 20px; background: #333; border-top: 1px solid #444; position: sticky; bottom: 0; }
-        input[type="text"] { width: 100%; padding: 8px; background: #252526; border: 1px solid #444; color: white; }
-        button { cursor: pointer; padding: 5px 15px; background: #007acc; border: none; color: white; border-radius: 3px; }
+        /* 기본 레이아웃 설정 */
+        body { 
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace; 
+            background-color: #1e1e1e; 
+            color: #d4d4d4; 
+            margin: 0; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            overflow: hidden;
+        }
+
+        /* 상단 헤더: 파일 업로드 및 정렬 */
+        header { 
+            padding: 12px 20px; 
+            background: #2d2d2d; 
+            display: flex; 
+            gap: 15px; 
+            align-items: center; 
+            border-bottom: 1px solid #3e3e3e;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        /* 로그 출력 영역 */
+        #log-container { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 15px; 
+            white-space: pre-wrap; 
+            word-break: break-all; 
+            line-height: 1.6;
+            font-size: 13px;
+        }
+
+        /* 각 로그 줄 스타일 */
+        .log-line { 
+            border-bottom: 1px solid #2a2a2a; 
+            padding: 2px 0;
+            display: block;
+        }
+
+        /* 강조 색상 */
+        .error { color: #ff5555; font-weight: bold; background-color: rgba(255, 85, 85, 0.1); padding: 0 2px; }
+        .warning { color: #ffb86c; background-color: rgba(255, 184, 108, 0.1); padding: 0 2px; }
+        
+        /* 하단 검색창 영역 */
+        footer { 
+            padding: 10px 20px; 
+            background: #2d2d2d; 
+            border-top: 1px solid #3e3e3e; 
+        }
+
+        input[type="text"] { 
+            width: 100%; 
+            padding: 10px; 
+            background: #3c3c3c; 
+            border: 1px solid #555; 
+            color: #fff; 
+            border-radius: 4px;
+            outline: none;
+        }
+
+        input[type="text"]:focus { border-color: #007acc; }
+
+        button { 
+            cursor: pointer; 
+            padding: 6px 16px; 
+            background: #007acc; 
+            border: none; 
+            color: white; 
+            border-radius: 4px;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+
         button:hover { background: #005a9e; }
+
+        #status { font-size: 12px; color: #888; }
     </style>
 </head>
 <body>
 
 <header>
     <input type="file" id="fileInput" accept=".txt,.log">
-    <button onclick="sortLogs()">날짜/시간순 정렬</button>
-    <span id="status">파일을 선택해주세요.</span>
+    <button onclick="sortLogs()">시간순 정렬</button>
+    <span id="status">파일을 로드해주세요.</span>
 </header>
 
 <div id="log-container"></div>
 
 <footer>
-    <input type="text" id="searchInput" placeholder="검색 키워드 입력 시 해당 로그만 표시 (Enter)...">
+    <input type="text" id="searchInput" placeholder="검색할 키워드를 입력하고 Enter를 누르세요 (에러 메시지만 필터링)">
 </footer>
 
 <script>
-    let logData = []; // 원본 로그 데이터 저장
+    let logData = []; // 원본 로그를 담는 배열
 
     const fileInput = document.getElementById('fileInput');
     const logContainer = document.getElementById('log-container');
     const searchInput = document.getElementById('searchInput');
     const status = document.getElementById('status');
 
-    // 1. 파일 읽기
+    // 1. 파일 읽기 로직
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
+        status.innerText = "파일 읽는 중...";
         const reader = new FileReader();
+        
         reader.onload = (event) => {
             const content = event.target.result;
-            logData = content.split('\n').filter(line => line.trim() !== '');
-            status.innerText = `총 ${logData.length}개 라인 로드됨`;
+            // 윈도우(CRLF) 및 리눅스(LF) 줄바꿈 대응
+            logData = content.split(/\r?\n/).filter(line => line.trim() !== '');
+            status.innerText = `로드 완료: ${logData.length.toLocaleString()} 줄`;
             renderLogs(logData);
         };
+
+        reader.onerror = () => {
+            alert("파일을 읽는 도중 오류가 발생했습니다.");
+        };
+
         reader.readAsText(file);
     });
 
-    // 2. 로그 렌더링 (색상 입히기 포함)
+    // 2. 로그 화면 출력 로직 (최적화)
     function renderLogs(data) {
-        logContainer.innerHTML = '';
+        logContainer.innerHTML = ''; // 기존 내용 삭제
+        
+        // 브라우저 과부하 방지를 위해 DocumentFragment 사용
         const fragment = document.createDocumentFragment();
 
         data.forEach(line => {
             const div = document.createElement('div');
             div.className = 'log-line';
             
-            // 대소문자 구분 없이 색상 적용
-            let formattedLine = line
+            // HTML 특수문자 치환 ( <, > 가 로그에 섞여있을 때 화면이 깨지는 것 방지 )
+            let safeLine = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+            // 에러/경고 키워드 하이라이팅
+            let highlighted = safeLine
                 .replace(/(error)/gi, '<span class="error">$1</span>')
                 .replace(/(warning)/gi, '<span class="warning">$1</span>');
             
-            div.innerHTML = formattedLine;
+            div.innerHTML = highlighted;
             fragment.appendChild(div);
         });
         
         logContainer.appendChild(fragment);
+        // 로드 후 맨 아래로 자동 스크롤
+        logContainer.scrollTop = logContainer.scrollHeight;
     }
 
-    // 3. 정렬 기능 (날짜:시간:시간대 기준)
+    // 3. 시간 순 정렬 로직 (로그 앞부분의 [날짜:시간] 기준)
     function sortLogs() {
-        status.innerText = "정렬 중...";
+        if (logData.length === 0) return;
+        status.innerText = "정렬 중... (잠시만 기다려주세요)";
+        
+        // 렌더링 스레드를 방해하지 않기 위해 비동기 처리
         setTimeout(() => {
             logData.sort((a, b) => {
-                const timeA = a.match(/\[(.*?)\]/);
-                const timeB = b.match(/\[(.*?)\]/);
-                if (timeA && timeB) {
-                    return timeA[1].localeCompare(timeB[1]);
-                }
-                return 0;
+                const matchA = a.match(/\[(.*?)\]/);
+                const matchB = b.match(/\[(.*?)\]/);
+                const valA = matchA ? matchA[1] : a;
+                const valB = matchB ? matchB[1] : b;
+                return valA.localeCompare(valB);
             });
             renderLogs(logData);
-            status.innerText = "정렬 완료";
-        }, 10);
+            status.innerText = `정렬 완료: ${logData.length.toLocaleString()} 줄`;
+        }, 50);
     }
 
-    // 4. 필터링 기능
-    searchInput.addEventListener('input', (e) => {
-        const keyword = e.target.value.toLowerCase();
-        if (!keyword) {
-            renderLogs(logData);
-            return;
-        }
+    // 4. 키워드 필터링 (Enter 키 입력 시)
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const keyword = e.target.value.toLowerCase().trim();
+            
+            if (!keyword) {
+                status.innerText = "전체 로그 표시 중";
+                renderLogs(logData);
+                return;
+            }
 
-        const filtered = logData.filter(line => line.toLowerCase().includes(keyword));
-        renderLogs(filtered);
+            status.innerText = `'${keyword}' 필터링 중...`;
+            
+            // 텍스트 포함 여부 검사
+            setTimeout(() => {
+                const filtered = logData.filter(line => 
+                    line.toLowerCase().includes(keyword)
+                );
+                renderLogs(filtered);
+                status.innerText = `필터링 완료: ${filtered.length.toLocaleString()} 줄 발견`;
+            }, 50);
+        }
     });
 </script>
 
