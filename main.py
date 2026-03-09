@@ -2,17 +2,28 @@ import webview
 import json
 import os
 
-# HTML/JS 소스 (고속 로딩 및 로딩바 추가)
+# HTML/JS 소스 (텍스트 선택 및 복사 기능 활성화)
 html_content = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <style>
-        body { font-family: 'Consolas', monospace; background-color: #1e1e1e; color: #d4d4d4; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        body { 
+            font-family: 'Consolas', monospace; 
+            background-color: #1e1e1e; 
+            color: #d4d4d4; 
+            margin: 0; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            overflow: hidden;
+            /* 텍스트 선택 허용 */
+            user-select: text !important;
+            -webkit-user-select: text !important;
+        }
         header { padding: 10px 20px; background: #2d2d2d; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #3e3e3e; }
         
-        /* 로딩바 스타일 */
         #progress-container { flex: 1; height: 20px; background: #3c3c3c; border-radius: 10px; overflow: hidden; display: none; position: relative; }
         #progress-bar { width: 0%; height: 100%; background: #007acc; transition: width 0.1s; }
         #progress-text { position: absolute; width: 100%; text-align: center; font-size: 11px; line-height: 20px; color: white; }
@@ -21,7 +32,18 @@ html_content = """
         #spacer { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
         #content { position: absolute; top: 0; left: 0; width: 100%; will-change: transform; }
         
-        .log-line { height: 20px; line-height: 20px; padding: 0 15px; font-size: 13px; white-space: pre; border-bottom: 1px solid #2a2a2a; box-sizing: border-box; }
+        .log-line { 
+            height: 20px; 
+            line-height: 20px; 
+            padding: 0 15px; 
+            font-size: 13px; 
+            white-space: pre; 
+            border-bottom: 1px solid #2a2a2a; 
+            box-sizing: border-box;
+            /* 개별 라인 선택 허용 */
+            user-select: text;
+            -webkit-user-select: text;
+        }
         .error { color: #ff5555; font-weight: bold; background: rgba(255,85,85,0.1); }
         .warning { color: #ffb86c; background: rgba(255,184,108,0.1); }
         
@@ -62,7 +84,6 @@ html_content = """
         const pBar = document.getElementById('progress-bar');
         const pText = document.getElementById('progress-text');
 
-        // 로딩 상태 업데이트 함수
         function updateLoading(percent, current, total) {
             pContainer.style.display = 'block';
             pBar.style.width = percent + '%';
@@ -72,18 +93,11 @@ html_content = """
             }
         }
 
-        function loadLogData(lines) {
-            allLogs = lines;
-            displayLogs = lines;
-            updateScroll();
-            document.getElementById('status').innerText = `총 ${allLogs.length.toLocaleString()} 줄 로드됨`;
-        }
-
         function render() {
             const scrollTop = viewport.scrollTop;
             const viewportHeight = viewport.offsetHeight;
             const startIndex = Math.floor(scrollTop / rowHeight);
-            const endIndex = Math.min(displayLogs.length, Math.ceil((scrollTop + viewportHeight) / rowHeight) + 10);
+            const endIndex = Math.min(displayLogs.length, Math.ceil((scrollTop + viewportHeight) / rowHeight) + 15);
             
             const visibleLines = displayLogs.slice(startIndex, endIndex);
             content.style.transform = `translateY(${startIndex * rowHeight}px)`;
@@ -134,17 +148,14 @@ class Api:
                 lines = f.read().splitlines()
             
             total = len(lines)
-            chunk_size = 50000  # 5만 줄 단위로 처리
+            chunk_size = 50000 
             
-            # 초기화
             window.evaluate_js("allLogs = []; displayLogs = []; updateLoading(0, 0, 0);")
             
             for i in range(0, total, chunk_size):
                 chunk = lines[i:i + chunk_size]
                 percent = int((min(i + chunk_size, total) / total) * 100)
-                # JSON 데이터를 안전하게 전달하기 위해 dumps 사용
-                json_data = json.dumps(chunk)
-                window.evaluate_js(f"allLogs.push(...{json_data}); updateLoading({percent}, {min(i + chunk_size, total)}, {total});")
+                window.evaluate_js(f"allLogs.push(...{json.dumps(chunk)}); updateLoading({percent}, {min(i + chunk_size, total)}, {total});")
             
             window.evaluate_js("displayLogs = allLogs; updateScroll();")
             
@@ -153,5 +164,7 @@ class Api:
 
 if __name__ == '__main__':
     api = Api()
+    # easy_drag=False 설정을 통해 텍스트 선택이 더 원활하게 함
     window = webview.create_window('Pro Log Viewer', html=html_content, js_api=api, width=1280, height=800)
-    webview.start()
+    # 텍스트 선택 기능을 강제로 활성화하기 위해 브라우저 컨텍스트 메뉴 허용
+    webview.start(debug=False)
