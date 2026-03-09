@@ -1,4 +1,4 @@
-name: Build Portable Log Viewer
+name: Build Log Viewer
 
 on:
   push:
@@ -17,7 +17,6 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-          # cache: 'pip' 부분을 제거했습니다. (에러 원인 해결)
 
       - name: Install dependencies
         run: |
@@ -25,11 +24,12 @@ jobs:
           pip install pywebview pyinstaller
 
       - name: Build Single EXE
+        # 실행 파일 이름을 LogViewer.exe로 설정
         run: |
-          pyinstaller --onefile --noconsole -n "FastLogViewer" main.py
+          pyinstaller --onefile --noconsole -n "LogViewer" main.py
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FastLogViewer-Portable
-          path: dist/FastLogViewer.exe
+          name: LogViewer-Portable
+          path: dist/LogViewer.exe
