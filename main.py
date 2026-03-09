@@ -1,12 +1,12 @@
 import webview
 
-# 모든 인코딩에 대응하는 초고속 범용 로더
+# 명칭이 통일된 최종 Log Viewer 코드
 html_content = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Universal Fast Log Viewer</title>
+    <title>Log Viewer</title>
     <style>
         body { font-family: 'Consolas', monospace; background-color: #1e1e1e; color: #d4d4d4; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; user-select: text !important; }
         header { padding: 10px 20px; background: #2d2d2d; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #3e3e3e; }
@@ -26,12 +26,12 @@ html_content = """
 <body>
     <header>
         <input type="file" id="realInput" accept=".txt,.log,*">
-        <button onclick="document.getElementById('realInput').click()">파일 열기 (전체 호환)</button>
-        <button onclick="sortLogs()">시간순 정렬</button>
-        <span id="status">대기 중</span>
+        <button onclick="document.getElementById('realInput').click()">Open Log File</button>
+        <button onclick="sortLogs()">Sort by Time</button>
+        <span id="status">Ready</span>
     </header>
     <div id="viewport"><div id="spacer"></div><div id="content"></div></div>
-    <footer><input type="text" id="searchInput" placeholder="검색어 입력 후 Enter..."></footer>
+    <footer><input type="text" id="searchInput" placeholder="Search keyword (Enter)..."></footer>
 
     <script>
         let allLogs = [];
@@ -41,30 +41,23 @@ html_content = """
         const spacer = document.getElementById('spacer');
         const content = document.getElementById('content');
 
-        // [핵심] 인코딩 호환성을 위한 바이너리 로딩 로직
         document.getElementById('realInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
             const startTime = performance.now();
-            document.getElementById('status').innerText = "파일 분석 중...";
+            document.getElementById('status').innerText = "Analyzing...";
 
             const reader = new FileReader();
             reader.onload = function(evt) {
-                // 바이너리 데이터를 읽어 UTF-8로 디코딩하되, 에러 발생 시 깨진 문자 대체(fatal: false)
                 const decoder = new TextDecoder('utf-8', { fatal: false, ignoreBOM: true });
                 const text = decoder.decode(evt.target.result);
-                
-                // 고속 줄바꿈 분리
                 allLogs = text.split(/\\r?\\n/);
                 displayLogs = allLogs;
-                
                 updateScroll();
                 const duration = ((performance.now() - startTime)/1000).toFixed(2);
-                document.getElementById('status').innerText = `로드 완료: ${allLogs.length.toLocaleString()} 줄 (${duration}초)`;
+                document.getElementById('status').innerText = `Loaded: ${allLogs.length.toLocaleString()} lines (${duration}s)`;
             };
-            
-            // 파일을 바이너리(ArrayBuffer)로 직접 읽음
             reader.readAsArrayBuffer(file);
         });
 
@@ -73,14 +66,12 @@ html_content = """
             const vHeight = viewport.offsetHeight;
             const startIndex = Math.floor(scrollTop / rowHeight);
             const endIndex = Math.min(displayLogs.length, Math.ceil((scrollTop + vHeight) / rowHeight) + 15);
-            
             const visibleLines = displayLogs.slice(startIndex, endIndex);
             content.style.transform = `translateY(${startIndex * rowHeight}px)`;
             
             let html = '';
             for(let i=0; i<visibleLines.length; i++) {
                 const line = visibleLines[i];
-                // 특수문자 이스케이프 및 강조
                 const safe = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
                 const highlighted = safe.replace(/(error)/gi, '<span class="error">$1</span>')
                                         .replace(/(warning)/gi, '<span class="warning">$1</span>');
@@ -98,11 +89,11 @@ html_content = """
         window.onresize = render;
 
         function sortLogs() {
-            document.getElementById('status').innerText = "정렬 중...";
+            document.getElementById('status').innerText = "Sorting...";
             setTimeout(() => {
                 displayLogs.sort((a, b) => a.substring(0, 19).localeCompare(b.substring(0, 19)));
                 render();
-                document.getElementById('status').innerText = "정렬 완료";
+                document.getElementById('status').innerText = "Sorted";
             }, 10);
         }
 
@@ -120,5 +111,6 @@ html_content = """
 """
 
 if __name__ == '__main__':
-    window = webview.create_window('Pro Universal Log Viewer', html=html_content, width=1280, height=800)
+    # 창 제목을 'Log Viewer'로 설정
+    window = webview.create_window('Log Viewer', html=html_content, width=1280, height=800)
     webview.start()
