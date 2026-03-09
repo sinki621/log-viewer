@@ -2,12 +2,12 @@ name: Build Portable Log Viewer
 
 on:
   push:
-    branches: [ "main" ]  # main 브랜치에 푸시될 때마다 실행
-  workflow_dispatch:      # 수동으로 실행하고 싶을 때 사용
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-latest  # .exe 빌드를 위해 윈도우 환경 사용
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
@@ -17,7 +17,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-          cache: 'pip' # 빌드 속도 향상을 위한 캐싱
+          # cache: 'pip' 부분을 제거했습니다. (에러 원인 해결)
 
       - name: Install dependencies
         run: |
@@ -25,9 +25,6 @@ jobs:
           pip install pywebview pyinstaller
 
       - name: Build Single EXE
-        # --onefile: 모든 파일을 하나로 합침
-        # --noconsole: 실행 시 검은색 터미널 창이 뜨지 않게 함
-        # -n: 생성될 파일 이름 설정
         run: |
           pyinstaller --onefile --noconsole -n "FastLogViewer" main.py
 
