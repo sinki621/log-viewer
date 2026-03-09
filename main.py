@@ -1,6 +1,8 @@
 import webview
+import json
+import base64
 
-# 호환성을 극대화한 Log Viewer HTML
+# 모든 문자를 강제로 읽어내는 Python 기반 로더
 html_content = """
 <!DOCTYPE html>
 <html>
@@ -20,13 +22,11 @@ html_content = """
         input { width: 100%; padding: 8px; background: #3c3c3c; border: 1px solid #555; color: #fff; border-radius: 4px; outline: none; }
         button { cursor: pointer; padding: 6px 12px; background: #007acc; border: none; color: white; border-radius: 4px; font-size: 12px; }
         #status { font-size: 12px; color: #888; margin-left: auto; }
-        #realInput { display: none; }
     </style>
 </head>
 <body>
     <header>
-        <input type="file" id="realInput" accept=".txt,.log,*">
-        <button onclick="document.getElementById('realInput').click()">Open Log File</button>
+        <button onclick="pywebview.api.open_log()">Open Log File</button>
         <button onclick="sortLogs()">Sort by Time</button>
         <span id="status">Ready</span>
     </header>
@@ -41,50 +41,19 @@ html_content = """
         const spacer = document.getElementById('spacer');
         const content = document.getElementById('content');
 
-        document.getElementById('realInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const startTime = performance.now();
-            document.getElementById('status').innerText = "Analyzing file...";
-
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                const buffer = evt.target.result;
-                let text = "";
-                
-                // 인코딩 시도 순서: UTF-8 -> EUC-KR(한국어 ANSI) -> UTF-16
-                const encodings = ['utf-8', 'euc-kr', 'utf-16'];
-                
-                for (let enc of encodings) {
-                    try {
-                        const decoder = new TextDecoder(enc, { fatal: true });
-                        text = decoder.decode(buffer);
-                        console.log("Decoded with: " + enc);
-                        break; // 성공하면 루프 탈출
-                    } catch (err) {
-                        if (enc === 'utf-16') { // 마지막까지 실패하면 강제 디코딩
-                            text = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
-                        }
-                        continue;
-                    }
-                }
-
-                allLogs = text.split(/\\r?\\n/);
-                displayLogs = allLogs;
-                updateScroll();
-                
-                const duration = ((performance.now() - startTime)/1000).toFixed(2);
-                document.getElementById('status').innerText = `Loaded: ${allLogs.length.toLocaleString()} lines (${duration}s)`;
-            };
-            reader.readAsArrayBuffer(file);
-        });
+        // Python에서 데이터를 밀어넣어줌
+        function setLogData(lines) {
+            allLogs = lines;
+            displayLogs = allLogs;
+            updateScroll();
+            document.getElementById('status').innerText = `Loaded: ${allLogs.length.toLocaleString()} lines`;
+        }
 
         function render() {
             const scrollTop = viewport.scrollTop;
             const vHeight = viewport.offsetHeight;
             const startIndex = Math.floor(scrollTop / rowHeight);
-            const endIndex = Math.min(displayLogs.length, Math.ceil((scrollTop + vHeight) / rowHeight) + 15);
+            const endIndex = Math.min(displayLogs.length, Math.ceil((scrollTop + vHeight) / rowHeight) + 20);
             
             const visibleLines = displayLogs.slice(startIndex, endIndex);
             content.style.transform = `translateY(${startIndex * rowHeight}px)`;
@@ -130,6 +99,34 @@ html_content = """
 </html>
 """
 
+class Api:
+    def open_log(self):
+        # 파일 선택 다이얼로그
+        result = window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=False, file_types=('Log Files (*.txt;*.log)', 'All files (*.*)'))
+        if not result: return
+        
+        file_path = result[0]
+        window.evaluate_js(f"document.getElementById('status').innerText = 'Reading file...'")
+        
+        try:
+            # 파일을 바이너리('rb')로 읽어서 인코딩 무관하게 가져옴
+            with open(file_path, 'rb') as f:
+                raw_data = f.read()
+            
+            # 여러 인코딩 시도 (UTF-8, CP949 순서)
+            try:
+                text = raw_data.decode('utf-8')
+            except:
+                text = raw_data.decode('cp949', errors='ignore') # 한국어 윈도우 인코딩
+            
+            lines = text.splitlines()
+            # 대량의 데이터를 JSON으로 안전하게 전달
+            window.evaluate_js(f"setLogData({json.dumps(lines)})")
+            
+        except Exception as e:
+            window.evaluate_js(f"alert('Error reading file: {str(e)}')")
+
 if __name__ == '__main__':
-    window = webview.create_window('Log Viewer', html=html_content, width=1280, height=800)
+    api = Api()
+    window = webview.create_window('Log Viewer', html=html_content, js_api=api, width=1280, height=800)
     webview.start()
