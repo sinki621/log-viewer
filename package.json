@@ -1,11 +1,34 @@
-"config": {
-  "forge": {
-    "packagerConfig": {},
-    "makers": [
-      {
-        "name": "@electron-forge/maker-zip",
-        "platforms": ["win32"]
-      }
-    ]
+{
+  "name": "log-viewer-app",
+  "version": "1.0.0",
+  "description": "Fast Log Viewer Portable",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@electron-forge/cli": "^7.0.0",
+    "@electron-forge/maker-zip": "^7.0.0",
+    "electron": "latest"
+  },
+  "config": {
+    "forge": {
+      "packagerConfig": {
+        "asar": true
+      },
+      "makers": [
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": [
+            "win32"
+          ]
+        }
+      ]
+    }
   }
 }
