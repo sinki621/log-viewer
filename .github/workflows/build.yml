@@ -1,4 +1,4 @@
-name: Build Portable EXE
+name: Build Compact Single EXE
 
 on:
   push:
@@ -6,25 +6,28 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest  # EXE 빌드를 위해 윈도우 환경 사용
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          node-version: 20
+          python-version: '3.10'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          pip install pywebview pyinstaller
 
-      - name: Build EXE
-        run: npm run make
+      - name: Build Single EXE
+        # --onefile: 단일 exe 생성 / --noconsole: 실행 시 터미널 숨김 / --add-data: html 포함
+        run: |
+          pyinstaller --onefile --noconsole --add-data "index.html;." main.py
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LogViewer-Portable
-          path: out/make/zip/win32/x64/*.zip  # 빌드된 압축 파일 경로
+          name: LogViewer-Compact
+          path: dist/main.exe
