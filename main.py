@@ -1,6 +1,6 @@
 import webview
 
-# 명칭이 통일된 최종 Log Viewer 코드
+# 호환성을 극대화한 Log Viewer HTML
 html_content = """
 <!DOCTYPE html>
 <html>
@@ -46,15 +46,34 @@ html_content = """
             if (!file) return;
 
             const startTime = performance.now();
-            document.getElementById('status').innerText = "Analyzing...";
+            document.getElementById('status').innerText = "Analyzing file...";
 
             const reader = new FileReader();
             reader.onload = function(evt) {
-                const decoder = new TextDecoder('utf-8', { fatal: false, ignoreBOM: true });
-                const text = decoder.decode(evt.target.result);
+                const buffer = evt.target.result;
+                let text = "";
+                
+                // 인코딩 시도 순서: UTF-8 -> EUC-KR(한국어 ANSI) -> UTF-16
+                const encodings = ['utf-8', 'euc-kr', 'utf-16'];
+                
+                for (let enc of encodings) {
+                    try {
+                        const decoder = new TextDecoder(enc, { fatal: true });
+                        text = decoder.decode(buffer);
+                        console.log("Decoded with: " + enc);
+                        break; // 성공하면 루프 탈출
+                    } catch (err) {
+                        if (enc === 'utf-16') { // 마지막까지 실패하면 강제 디코딩
+                            text = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+                        }
+                        continue;
+                    }
+                }
+
                 allLogs = text.split(/\\r?\\n/);
                 displayLogs = allLogs;
                 updateScroll();
+                
                 const duration = ((performance.now() - startTime)/1000).toFixed(2);
                 document.getElementById('status').innerText = `Loaded: ${allLogs.length.toLocaleString()} lines (${duration}s)`;
             };
@@ -66,6 +85,7 @@ html_content = """
             const vHeight = viewport.offsetHeight;
             const startIndex = Math.floor(scrollTop / rowHeight);
             const endIndex = Math.min(displayLogs.length, Math.ceil((scrollTop + vHeight) / rowHeight) + 15);
+            
             const visibleLines = displayLogs.slice(startIndex, endIndex);
             content.style.transform = `translateY(${startIndex * rowHeight}px)`;
             
@@ -111,6 +131,5 @@ html_content = """
 """
 
 if __name__ == '__main__':
-    # 창 제목을 'Log Viewer'로 설정
     window = webview.create_window('Log Viewer', html=html_content, width=1280, height=800)
     webview.start()
