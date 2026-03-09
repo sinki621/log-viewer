@@ -1,0 +1,30 @@
+name: Build Portable EXE
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest  # EXE 빌드를 위해 윈도우 환경 사용
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build EXE
+        run: npm run make
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LogViewer-Portable
+          path: out/make/zip/win32/x64/*.zip  # 빌드된 압축 파일 경로
