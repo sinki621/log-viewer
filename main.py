@@ -168,5 +168,5 @@ html_content = """
 
 if __name__ == '__main__':
     api = LogApi()
-    window = webview.create_window('Pro Log Viewer', html=html_content, js_api=api, width=1280, height=800)
+    window = webview.create_window('Log Viewer', html=html_content, js_api=api, width=1280, height=800)
     webview.start()
