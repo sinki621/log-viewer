@@ -1,8 +1,7 @@
 import webview
 import json
-import base64
 
-# 모든 문자를 강제로 읽어내는 Python 기반 로더
+# 원시 텍스트 스트리밍 엔진
 html_content = """
 <!DOCTYPE html>
 <html>
@@ -16,8 +15,8 @@ html_content = """
         #spacer { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
         #content { position: absolute; top: 0; left: 0; width: 100%; will-change: transform; }
         .log-line { height: 20px; line-height: 20px; padding: 0 15px; font-size: 13px; white-space: pre; border-bottom: 1px solid #2a2a2a; box-sizing: border-box; overflow: hidden; }
-        .error { color: #ff5555; font-weight: bold; background: rgba(255,85,85,0.1); }
-        .warning { color: #ffb86c; background: rgba(255, 184, 108, 0.1); }
+        .error { color: #ff5555; font-weight: bold; }
+        .warning { color: #ffb86c; }
         footer { padding: 10px; background: #2d2d2d; border-top: 1px solid #3e3e3e; }
         input { width: 100%; padding: 8px; background: #3c3c3c; border: 1px solid #555; color: #fff; border-radius: 4px; outline: none; }
         button { cursor: pointer; padding: 6px 12px; background: #007acc; border: none; color: white; border-radius: 4px; font-size: 12px; }
@@ -41,12 +40,11 @@ html_content = """
         const spacer = document.getElementById('spacer');
         const content = document.getElementById('content');
 
-        // Python에서 데이터를 밀어넣어줌
+        // Python에서 데이터를 받아와서 즉시 변수에 할당
         function setLogData(lines) {
             allLogs = lines;
             displayLogs = allLogs;
             updateScroll();
-            document.getElementById('status').innerText = `Loaded: ${allLogs.length.toLocaleString()} lines`;
         }
 
         function render() {
@@ -60,7 +58,8 @@ html_content = """
             
             let html = '';
             for(let i=0; i<visibleLines.length; i++) {
-                const line = visibleLines[i];
+                const line = visibleLines[i] || "";
+                // 가장 빠른 이스케이프 처리
                 const safe = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
                 const highlighted = safe.replace(/(error)/gi, '<span class="error">$1</span>')
                                         .replace(/(warning)/gi, '<span class="warning">$1</span>');
@@ -101,30 +100,31 @@ html_content = """
 
 class Api:
     def open_log(self):
-        # 파일 선택 다이얼로그
-        result = window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=False, file_types=('Log Files (*.txt;*.log)', 'All files (*.*)'))
+        result = window.create_file_dialog(webview.OPEN_DIALOG)
         if not result: return
         
         file_path = result[0]
-        window.evaluate_js(f"document.getElementById('status').innerText = 'Reading file...'")
+        window.evaluate_js("document.getElementById('status').innerText = 'Reading...'")
         
         try:
-            # 파일을 바이너리('rb')로 읽어서 인코딩 무관하게 가져옴
+            # 1. 파일을 바이너리로 읽음
             with open(file_path, 'rb') as f:
-                raw_data = f.read()
+                content = f.read()
             
-            # 여러 인코딩 시도 (UTF-8, CP949 순서)
+            # 2. 인코딩 무시하고 강제 디코딩 (가장 범용적인 utf-8 시도 후 실패시 cp949)
             try:
-                text = raw_data.decode('utf-8')
+                text = content.decode('utf-8', errors='replace')
             except:
-                text = raw_data.decode('cp949', errors='ignore') # 한국어 윈도우 인코딩
+                text = content.decode('cp949', errors='replace')
             
+            # 3. 줄 단위 분리
             lines = text.splitlines()
-            # 대량의 데이터를 JSON으로 안전하게 전달
-            window.evaluate_js(f"setLogData({json.dumps(lines)})")
+            
+            # 4. JSON으로 변환하여 전달 (JS에서 바로 사용 가능하도록)
+            window.evaluate_js(f"setLogData({json.dumps(lines)}); document.getElementById('status').innerText = 'Loaded: {len(lines):,} lines';")
             
         except Exception as e:
-            window.evaluate_js(f"alert('Error reading file: {str(e)}')")
+            window.evaluate_js(f"alert('Read Error: {str(e)}')")
 
 if __name__ == '__main__':
     api = Api()
