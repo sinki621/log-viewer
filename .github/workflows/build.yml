@@ -17,20 +17,14 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+          # cache 설정을 삭제하여 requirements.txt 파일 탐색 에러 원천 차단
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # 프로젝트 루트의 requirements.txt를 읽어 필요한 라이브러리 설치
-          if (Test-Path requirements.txt) {
-            pip install -r requirements.txt
-          } else {
-            # 파일이 없을 경우를 대비해 핵심 라이브러리 강제 설치
-            pip install pywebview pyinstaller chardet
-          }
+          pip install pywebview pyinstaller chardet
 
       - name: Build Single EXE
-        # --collect-all 옵션은 chardet 내부의 모든 데이터를 포함시켜 런타임 에러를 방지합니다.
         run: |
           pyinstaller --onefile --noconsole --collect-all chardet -n "LogViewer" main.py
 
